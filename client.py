@@ -2,6 +2,9 @@ from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
 from datetime import datetime, timedelta
 import pytz
+import asyncio
+import anyio
+from contextlib import asynccontextmanager
 
 # pytz 설치 필요: pip install pytz
 
@@ -9,12 +12,22 @@ server_params = StdioServerParameters(
     command="/private/var/folders/9m/8c8yxc_55fd8czwpk611j6080000gn/T/AppTranslocation/3E61EC49-B551-4875-BD8D-C32E0E862F7D/d/iMCP.app/Contents/MacOS/imcp-server",  # Executable
 )
 
-async def run():
-    async with stdio_client(server_params) as (read, write):
+file_server_params = StdioServerParameters(
+    command="npx",
+    args=["-y", "@wonderwhy-er/desktop-commander"]
+)
+
+@asynccontextmanager
+async def create_server_session(params):
+    async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
-
             await session.initialize()
+            yield session
 
+async def run():
+    try:
+        # iMCP 서버 초기화 및 이벤트 생성
+        async with create_server_session(server_params) as imcp_session:
             # 한국 시간대 설정
             korea_tz = pytz.timezone('Asia/Seoul')
             
@@ -31,7 +44,7 @@ async def run():
             print(f"종료 시간: {end_iso}")
 
             # 이벤트 생성
-            result = await session.call_tool("createEvent", {
+            result = await imcp_session.call_tool("createEvent", {
                 "title": "손동협",
                 "startDate": start_iso,
                 "endDate": end_iso,
@@ -41,13 +54,18 @@ async def run():
             print(f"이벤트 생성 결과: {result}")
 
             # 생성된 이벤트 확인
-            events = await session.call_tool("fetchEvents", {
+            events = await imcp_session.call_tool("fetchEvents", {
                 "startDate": start_iso,
                 "endDate": end_iso
             })
             print(f"생성된 이벤트: {events}")
 
-if __name__ == "__main__":
-    import asyncio
+        # File 서버 초기화
+        async with create_server_session(file_server_params) as file_session:
+            print("File 서버 초기화 완료")
 
+    except Exception as e:
+        print(f"에러 발생: {e}")
+
+if __name__ == "__main__":
     asyncio.run(run())
