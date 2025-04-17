@@ -247,280 +247,111 @@ def create_notification_summary(issue, notification_type, comments=None,
     
     return summary
 
-def create_daily_note(date, notifications, obsidian_vault_path, daily_notes_folder):
-    """특정 날짜의 알림 노트 생성"""
-    daily_path = os.path.join(obsidian_vault_path, daily_notes_folder)
-    Path(daily_path).mkdir(parents=True, exist_ok=True)
+def create_daily_note(date, notifications_by_type, vault_path, jira_base_folder):
+    """일별 노트 생성"""
+    # 날짜별 폴더 구조 생성 (YYYY-MM-DD)
+    date_folder = os.path.join(vault_path, jira_base_folder, date.strftime('%Y-%m-%d'))
+    os.makedirs(date_folder, exist_ok=True)
     
-    # YYYY-MM-DD 형식의 파일명
-    file_name = f"{date.strftime('%Y-%m-%d')}.md"
-    file_path = os.path.join(daily_path, file_name)
+    note_path = os.path.join(date_folder, f"{date.strftime('%Y-%m-%d')}.md")
     
-    # 이미 파일이 존재하는 경우 내용 로드
-    existing_content = ""
-    if os.path.exists(file_path):
-        with open(file_path, 'r', encoding='utf-8') as f:
-            existing_content = f.read()
-    
-    # 프론트매터 준비
-    front_matter = f"""---
-date: {date.strftime('%Y-%m-%d')}
-tags: [jira-daily, notifications]
----
-
-"""
-    
-    # 본문 준비
-    weekday_names = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
-    weekday = weekday_names[date.weekday()]
-    title = f"# Jira 알림 - {date.strftime('%Y년 %m월 %d일')} ({weekday})\n\n"
-    
-    # 새로운 알림이 있는지 확인
-    if notifications:
-        content = f"오늘 발생한 Jira 알림 {len(notifications)}건을 확인하세요.\n\n"
+    with open(note_path, 'w', encoding='utf-8') as f:
+        f.write(f"# {date.strftime('%Y년 %m월 %d일')} Jira 알림\n\n")
         
-        # 알림 유형별로 분류
-        by_type = {
-            "assigned": [],
-            "mentioned": [],
-            "commented": [],
-            "created": [],
-            "watching": []
-        }
-        
-        for notif in notifications:
-            by_type[notif['type']].append(notif)
-        
-        # 유형별로 알림 추가
-        for type_name, type_label in [
-            ("assigned", "📌 나에게 할당된 이슈"),
-            ("mentioned", "💬 댓글에서 멘션됨"),
-            ("commented", "🗨️ 내가 댓글을 단 이슈"),
-            ("created", "✅ 내가 생성한 이슈"),
-            ("watching", "👁️ 내가 지켜보는 이슈")
-        ]:
-            if by_type[type_name]:
-                content += f"## {type_label} ({len(by_type[type_name])}건)\n\n"
-                for notif in by_type[type_name]:
-                    content += notif['summary']
-        
-        full_content = title + content
-    else:
-        # 새로운 알림이 없는 경우
-        full_content = title + "오늘 새로운 Jira 알림이 없습니다.\n\n"
+        for notification_type, issues in notifications_by_type.items():
+            if issues:
+                f.write(f"## {notification_type}\n\n")
+                for issue, comments in issues:
+                    f.write(f"### {issue.key}: {issue.fields.summary}\n\n")
+                    f.write(f"- 상태: {issue.fields.status.name}\n")
+                    f.write(f"- 담당자: {issue.fields.assignee.displayName if issue.fields.assignee else '미지정'}\n")
+                    f.write(f"- 마지막 업데이트: {issue.fields.updated}\n\n")
+                    
+                    if comments:
+                        f.write("#### 댓글\n\n")
+                        for comment in comments:
+                            f.write(f"- {comment.author.displayName}: {comment.body}\n")
+                        f.write("\n")
     
-    # 파일 내용 생성 (새로 생성 또는 업데이트)
-    if existing_content:
-        # 기존 내용이 있으면, 프론트매터는 유지하고 내용만 업데이트
-        if "---" in existing_content:
-            parts = existing_content.split("---", 2)
-            if len(parts) >= 3:
-                # 프론트매터가 있는 경우
-                updated_content = f"---{parts[1]}---\n\n{full_content}"
-            else:
-                # 프론트매터가 없는 경우
-                updated_content = front_matter + full_content
-        else:
-            # 프론트매터가 없는 경우
-            updated_content = front_matter + full_content
-    else:
-        # 새 파일 생성
-        updated_content = front_matter + full_content
-    
-    # 파일 저장
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(updated_content)
-    
-    return file_path
+    return note_path
 
-def create_weekly_note(week_start_date, daily_notes, obsidian_vault_path, daily_notes_folder):
-    """주간 알림 노트 생성"""
-    weekly_path = os.path.join(obsidian_vault_path, daily_notes_folder, "Weekly")
-    Path(weekly_path).mkdir(parents=True, exist_ok=True)
+def create_weekly_note(start_date, daily_notifications, vault_path, jira_base_folder):
+    """주간 노트 생성"""
+    # 주간 노트는 해당 주의 월요일 폴더에 저장
+    date_folder = os.path.join(vault_path, jira_base_folder, start_date.strftime('%Y-%m-%d'))
+    os.makedirs(date_folder, exist_ok=True)
     
-    # 해당 주의 월요일 날짜로 파일명 생성
-    week_number = week_start_date.strftime('%U')  # 연중 주차
-    file_name = f"{week_start_date.strftime('%Y')}-W{week_number}.md"
-    file_path = os.path.join(weekly_path, file_name)
+    end_date = start_date + datetime.timedelta(days=6)
+    note_path = os.path.join(date_folder, f"{start_date.strftime('%Y-%m-%d')}_weekly.md")
     
-    # 주 범위 계산 (월요일~일요일)
-    week_end_date = week_start_date + datetime.timedelta(days=6)
-    
-    # 프론트매터
-    front_matter = f"""---
-week: {week_number}
-start_date: {week_start_date.strftime('%Y-%m-%d')}
-end_date: {week_end_date.strftime('%Y-%m-%d')}
-tags: [jira-weekly, notifications]
----
-
-"""
-    
-    # 본문
-    title = f"# Jira 주간 알림 - {week_start_date.strftime('%Y년 %m월 %d일')} ~ {week_end_date.strftime('%Y년 %m월 %d일')}\n\n"
-    
-    content = f"이번 주에 발생한 Jira 활동 요약입니다.\n\n"
-    
-    # 일별 노트 링크
-    content += "## 일별 알림\n\n"
-    
-    for day in range(7):
-        date = week_start_date + datetime.timedelta(days=day)
-        weekday_names = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
-        weekday = weekday_names[date.weekday()]
+    with open(note_path, 'w', encoding='utf-8') as f:
+        f.write(f"# {start_date.strftime('%Y년 %m월 %d일')} ~ {end_date.strftime('%Y년 %m월 %d일')} 주간 Jira 알림\n\n")
         
-        date_str = date.strftime('%Y-%m-%d')
-        if date_str in daily_notes:
-            content += f"- [[{daily_notes_folder}/{date_str}|{date.strftime('%Y년 %m월 %d일')} ({weekday})]] - {daily_notes[date_str]}건의 알림\n"
-        else:
-            content += f"- {date.strftime('%Y년 %m월 %d일')} ({weekday}) - 알림 없음\n"
+        for date in sorted(daily_notifications.keys()):
+            if start_date <= date <= end_date:
+                f.write(f"## {date.strftime('%Y년 %m월 %d일')}\n\n")
+                for notification_type, issues in daily_notifications[date].items():
+                    if issues:
+                        f.write(f"### {notification_type}\n\n")
+                        for issue, _ in issues:
+                            f.write(f"- {issue.key}: {issue.fields.summary}\n")
+                        f.write("\n")
     
-    content += "\n"
-    
-    # 파일 저장
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(front_matter + title + content)
-    
-    return file_path
+    return note_path
 
-def create_monthly_note(month_date, weekly_notes, obsidian_vault_path, daily_notes_folder):
-    """월간 알림 노트 생성"""
-    monthly_path = os.path.join(obsidian_vault_path, daily_notes_folder, "Monthly")
-    Path(monthly_path).mkdir(parents=True, exist_ok=True)
+def create_monthly_note(month_date, daily_notifications, vault_path, jira_base_folder):
+    """월간 노트 생성"""
+    # 월간 노트는 해당 월의 첫 날 폴더에 저장
+    date_folder = os.path.join(vault_path, jira_base_folder, month_date.strftime('%Y-%m-%d'))
+    os.makedirs(date_folder, exist_ok=True)
     
-    # 해당 월의 첫째 날짜로 파일명 생성
-    file_name = f"{month_date.strftime('%Y-%m')}.md"
-    file_path = os.path.join(monthly_path, file_name)
+    note_path = os.path.join(date_folder, f"{month_date.strftime('%Y-%m')}_monthly.md")
     
-    # 월의 마지막 날 계산
-    if month_date.month == 12:
-        next_month = datetime.date(month_date.year + 1, 1, 1)
-    else:
-        next_month = datetime.date(month_date.year, month_date.month + 1, 1)
-    
-    last_day = (next_month - datetime.timedelta(days=1)).day
-    month_end_date = datetime.date(month_date.year, month_date.month, last_day)
-    
-    # 프론트매터
-    front_matter = f"""---
-year: {month_date.year}
-month: {month_date.month}
-start_date: {month_date.strftime('%Y-%m-%d')}
-end_date: {month_end_date.strftime('%Y-%m-%d')}
-tags: [jira-monthly, notifications]
----
-
-"""
-    
-    # 본문
-    title = f"# Jira 월간 알림 - {month_date.strftime('%Y년 %m월')}\n\n"
-    
-    content = f"{month_date.strftime('%Y년 %m월')}에 발생한 Jira 활동 요약입니다.\n\n"
-    
-    # 주간 노트 링크
-    content += "## 주간 알림\n\n"
-    
-    # 해당 월의 주차 정보 정렬
-    sorted_weeks = sorted(weekly_notes.keys())
-    
-    for week in sorted_weeks:
-        week_start_date = datetime.datetime.strptime(weekly_notes[week]['start_date'], '%Y-%m-%d').date()
-        week_end_date = datetime.datetime.strptime(weekly_notes[week]['end_date'], '%Y-%m-%d').date()
+    with open(note_path, 'w', encoding='utf-8') as f:
+        f.write(f"# {month_date.strftime('%Y년 %m월')} Jira 알림\n\n")
         
-        # 이번 달에 해당하는 주차만 포함
-        if (week_start_date.month == month_date.month or week_end_date.month == month_date.month) and \
-           (week_start_date.year == month_date.year or week_end_date.year == month_date.year):
-            content += f"- [[{daily_notes_folder}/Weekly/{week}|{week_start_date.strftime('%Y년 %m월 %d일')} ~ {week_end_date.strftime('%Y년 %m월 %d일')}]] - {weekly_notes[week]['count']}건의 알림\n"
+        for date in sorted(daily_notifications.keys()):
+            if date.year == month_date.year and date.month == month_date.month:
+                f.write(f"## {date.strftime('%Y년 %m월 %d일')}\n\n")
+                for notification_type, issues in daily_notifications[date].items():
+                    if issues:
+                        f.write(f"### {notification_type}\n\n")
+                        for issue, _ in issues:
+                            f.write(f"- {issue.key}: {issue.fields.summary}\n")
+                        f.write("\n")
     
-    content += "\n"
-    
-    # 파일 저장
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(front_matter + title + content)
-    
-    return file_path
+    return note_path
 
-def create_notification_index(obsidian_vault_path, daily_notes_folder):
+def create_notification_index(vault_path, jira_base_folder):
     """알림 인덱스 페이지 생성"""
-    index_path = os.path.join(obsidian_vault_path, daily_notes_folder, "알림 인덱스.md")
+    index_folder = os.path.join(vault_path, jira_base_folder)
+    os.makedirs(index_folder, exist_ok=True)
     
-    # 오늘 날짜
-    today = datetime.date.today()
+    index_path = os.path.join(index_folder, "index.md")
     
-    # 프론트매터
-    front_matter = f"""---
-created: {today.strftime('%Y-%m-%d')}
-tags: [jira-index, notifications]
----
-
-"""
-    
-    # 본문
-    title = "# Jira 알림 인덱스\n\n"
-    
-    content = "Jira 알림을 날짜별, 주별, 월별로 확인할 수 있습니다.\n\n"
-    
-    # 최근 알림
-    content += "## 최근 알림\n\n"
-    
-    # 최근 7일간 일자
-    for days_ago in range(7):
-        date = today - datetime.timedelta(days=days_ago)
-        weekday_names = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
-        weekday = weekday_names[date.weekday()]
-        
-        date_str = date.strftime('%Y-%m-%d')
-        date_file = os.path.join(daily_notes_folder, date_str)
-        if os.path.exists(os.path.join(obsidian_vault_path, f"{date_file}.md")):
-            content += f"- [[{date_file}|{date.strftime('%Y년 %m월 %d일')} ({weekday})]]\n"
-        else:
-            content += f"- {date.strftime('%Y년 %m월 %d일')} ({weekday}) - 알림 없음\n"
-    
-    # 주간 알림
-    content += "\n## 주간 알림\n\n"
-    
-    # 최근 4주
-    for weeks_ago in range(4):
-        # 이번 주 월요일 찾기
-        days_since_monday = today.weekday()
-        monday = today - datetime.timedelta(days=days_since_monday + 7*weeks_ago)
-        sunday = monday + datetime.timedelta(days=6)
-        
-        week_number = monday.strftime('%U')
-        week_str = f"{monday.strftime('%Y')}-W{week_number}"
-        week_file = os.path.join(daily_notes_folder, "Weekly", week_str)
-        
-        if os.path.exists(os.path.join(obsidian_vault_path, f"{week_file}.md")):
-            content += f"- [[{week_file}|{monday.strftime('%Y년 %m월 %d일')} ~ {sunday.strftime('%Y년 %m월 %d일')}]]\n"
-        else:
-            content += f"- {monday.strftime('%Y년 %m월 %d일')} ~ {sunday.strftime('%Y년 %m월 %d일')}\n"
-    
-    # 월간 알림
-    content += "\n## 월간 알림\n\n"
-    
-    # 최근 3개월
-    for months_ago in range(3):
-        # n개월 전 날짜 계산
-        year = today.year
-        month = today.month - months_ago
-        
-        # 월이 0 이하면 작년으로 조정
-        while month <= 0:
-            year -= 1
-            month += 12
-        
-        month_date = datetime.date(year, month, 1)
-        month_str = month_date.strftime('%Y-%m')
-        month_file = os.path.join(daily_notes_folder, "Monthly", month_str)
-        
-        if os.path.exists(os.path.join(obsidian_vault_path, f"{month_file}.md")):
-            content += f"- [[{month_file}|{month_date.strftime('%Y년 %m월')}]]\n"
-        else:
-            content += f"- {month_date.strftime('%Y년 %m월')}\n"
-    
-    # 파일 저장
     with open(index_path, 'w', encoding='utf-8') as f:
-        f.write(front_matter + title + content)
+        f.write("# Jira 알림 인덱스\n\n")
+        f.write("## 월별 알림\n\n")
+        
+        # 월별 노트 링크 생성
+        current_date = datetime.date.today()
+        for i in range(12):
+            month_date = current_date.replace(day=1) - datetime.timedelta(days=30*i)
+            f.write(f"- [[{month_date.strftime('%Y-%m-%d')}/{month_date.strftime('%Y-%m')}_monthly|{month_date.strftime('%Y년 %m월')}]]\n")
+        
+        f.write("\n## 주간 알림\n\n")
+        
+        # 주간 노트 링크 생성
+        for i in range(4):
+            week_start = current_date - datetime.timedelta(days=7*i)
+            f.write(f"- [[{week_start.strftime('%Y-%m-%d')}/{week_start.strftime('%Y-%m-%d')}_weekly|{week_start.strftime('%Y년 %m월 %d일')} 주간]]\n")
+        
+        f.write("\n## 일별 알림\n\n")
+        
+        # 일별 노트 링크 생성
+        for i in range(7):
+            day = current_date - datetime.timedelta(days=i)
+            f.write(f"- [[{day.strftime('%Y-%m-%d')}/{day.strftime('%Y-%m-%d')}|{day.strftime('%Y년 %m월 %d일')}]]\n")
     
     return index_path
 

@@ -23,7 +23,6 @@ JIRA_EMAIL = os.getenv("JIRA_EMAIL")
 JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
 OBSIDIAN_VAULT_PATH = os.getenv("OBSIDIAN_VAULT_PATH")
 JIRA_BASE_FOLDER = os.getenv("JIRA_BASE_FOLDER", "Jira")  # 기본값 설정
-DAILY_NOTES_FOLDER = os.getenv("DAILY_NOTES_FOLDER", "Daily Jira Notes")  # 기본값 설정
 
 # 최근 검색 시간을 저장할 파일
 LAST_CHECK_FILE = os.path.join(OBSIDIAN_VAULT_PATH, ".jira_last_check")
@@ -52,39 +51,8 @@ def main():
     print(f"내가 생성한 이슈: {len(notifications['created'])}개")
     print(f"내가 지켜보는 이슈: {len(notifications['watching'])}개")
     
-    # 모든 관련 이슈를 하나의 목록으로 합치기 (중복 제거)
-    all_issues = []
-    for issue_type, issues in notifications.items():
-        all_issues.extend(issues)
-    
-    # 중복 제거
-    all_issues = utils.remove_duplicates(all_issues)
-    print(f"총 알림 이슈 (중복 제거): {len(all_issues)}개")
-    
-    # 프로젝트별로 이슈 분류 및 저장
-    projects = {}
-    saved_files = []
-    
-    for issue in all_issues:
-        project_key = issue.fields.project.key
-        if project_key not in projects:
-            projects[project_key] = []
-        projects[project_key].append(issue)
-        
-        # 모든 댓글 가져오기 (last_check_time을 None으로 설정하여 모든 댓글 가져오기)
-        comments = utils.get_issue_comments(jira, issue.key, None)
-        
-        # Markdown 변환
-        markdown = utils.issue_to_markdown(issue, comments, JIRA_SERVER)
-        
-        # Obsidian에 저장
-        file_path = utils.save_to_obsidian(issue, markdown, OBSIDIAN_VAULT_PATH, JIRA_BASE_FOLDER)
-        saved_files.append(file_path)
-        
-        print(f"저장됨: {file_path} (댓글 {len(comments)}개 포함)")
-    
-    # 날짜별 알림 생성
-    daily_notifications = defaultdict(list)
+    # 날짜별 알림 정리
+    daily_notifications = defaultdict(lambda: defaultdict(list))
     
     # 알림 타입별 처리
     for notification_type, issues in notifications.items():
@@ -98,104 +66,47 @@ def main():
             # 최근 댓글 확인
             comments = utils.get_issue_comments(jira, issue.key, last_check_time)
             
-            # 알림 요약 생성
-            summary = utils.create_notification_summary(
-                issue, notification_type, comments, JIRA_SERVER, 
-                OBSIDIAN_VAULT_PATH, JIRA_BASE_FOLDER
-            )
-            
-            # 날짜별로 알림 추가 (중복 방지)
-            issue_already_added = False
-            for existing_notif in daily_notifications[update_date]:
-                if existing_notif['issue'].key == issue.key:
-                    issue_already_added = True
-                    break
-            
-            if not issue_already_added:
-                daily_notifications[update_date].append({
-                    'issue': issue,
-                    'type': notification_type,
-                    'summary': summary
-                })
+            # 날짜별로 알림 정리
+            daily_notifications[update_date][notification_type].append((issue, comments))
     
-    # 일별 노트 생성
-    created_daily_notes = {}
-    for date, notifications_list in daily_notifications.items():
-        note_path = utils.create_daily_note(date, notifications_list, OBSIDIAN_VAULT_PATH, DAILY_NOTES_FOLDER)
-        created_daily_notes[date.strftime('%Y-%m-%d')] = len(notifications_list)
-        print(f"일별 알림 생성: {note_path} ({len(notifications_list)}건)")
+    # 날짜별 노트 생성
+    for date, notifications_by_type in daily_notifications.items():
+        # 날짜별 노트 생성
+        daily_note_path = utils.create_daily_note(
+            date,
+            notifications_by_type,
+            OBSIDIAN_VAULT_PATH,
+            JIRA_BASE_FOLDER
+        )
+        print(f"생성됨: {daily_note_path}")
     
-    # 주간 노트 생성
-    created_weekly_notes = {}
+    # 주간 노트 생성 (최근 7일)
+    week_start_date = datetime.date.today() - datetime.timedelta(days=7)
+    weekly_note_path = utils.create_weekly_note(
+        week_start_date,
+        daily_notifications,
+        OBSIDIAN_VAULT_PATH,
+        JIRA_BASE_FOLDER
+    )
+    print(f"생성됨: {weekly_note_path}")
     
-    # 해당 알림들의 날짜 범위에서 각 주의 월요일 찾기
-    all_dates = list(daily_notifications.keys())
-    if all_dates:
-        min_date = min(all_dates)
-        max_date = max(all_dates)
-        
-        # 첫 주의 월요일 찾기
-        days_since_monday = min_date.weekday()
-        first_monday = min_date - datetime.timedelta(days=days_since_monday)
-        
-        # 마지막 주의 월요일 찾기
-        days_since_last_monday = max_date.weekday()
-        last_monday = max_date - datetime.timedelta(days=days_since_last_monday)
-        
-        # 각 주별로 주간 노트 생성
-        current_monday = first_monday
-        while current_monday <= last_monday:
-            week_number = current_monday.strftime('%U')
-            week_key = f"{current_monday.strftime('%Y')}-W{week_number}"
-            
-            # 이 주에 해당하는 일별 노트 찾기
-            week_daily_notes = {}
-            for i in range(7):
-                day = current_monday + datetime.timedelta(days=i)
-                day_str = day.strftime('%Y-%m-%d')
-                if day_str in created_daily_notes:
-                    week_daily_notes[day_str] = created_daily_notes[day_str]
-            
-            # 주간 노트 생성
-            if week_daily_notes:
-                note_path = utils.create_weekly_note(
-                    current_monday, week_daily_notes, 
-                    OBSIDIAN_VAULT_PATH, DAILY_NOTES_FOLDER
-                )
-                created_weekly_notes[week_key] = {
-                    'start_date': current_monday.strftime('%Y-%m-%d'),
-                    'end_date': (current_monday + datetime.timedelta(days=6)).strftime('%Y-%m-%d'),
-                    'count': sum(week_daily_notes.values())
-                }
-                print(f"주간 알림 생성: {note_path}")
-            
-            # 다음 주 월요일
-            current_monday += datetime.timedelta(days=7)
+    # 월간 노트 생성 (이번 달)
+    month_date = datetime.date.today().replace(day=1)
+    monthly_note_path = utils.create_monthly_note(
+        month_date,
+        daily_notifications,
+        OBSIDIAN_VAULT_PATH,
+        JIRA_BASE_FOLDER
+    )
+    print(f"생성됨: {monthly_note_path}")
     
-    # 월간 노트 생성
-    if all_dates:
-        # 월별로 그룹화
-        months = set()
-        for date in all_dates:
-            months.add((date.year, date.month))
-        
-        for year, month in months:
-            month_date = datetime.date(year, month, 1)
-            note_path = utils.create_monthly_note(
-                month_date, created_weekly_notes, 
-                OBSIDIAN_VAULT_PATH, DAILY_NOTES_FOLDER
-            )
-            print(f"월간 알림 생성: {note_path}")
+    # 인덱스 페이지 생성
+    index_path = utils.create_notification_index(OBSIDIAN_VAULT_PATH, JIRA_BASE_FOLDER)
+    print(f"생성됨: {index_path}")
     
-    # 알림 인덱스 생성
-    index_path = utils.create_notification_index(OBSIDIAN_VAULT_PATH, DAILY_NOTES_FOLDER)
-    print(f"알림 인덱스 생성: {index_path}")
-    
-    # 현재 시간을 마지막 확인 시간으로 저장
+    # 마지막 확인 시간 업데이트
     utils.save_last_check_time(LAST_CHECK_FILE)
-    
-    print(f"총 {len(saved_files)}개의 이슈가 Obsidian에 동기화되었습니다.")
-    print(f"총 {len(created_daily_notes)}일의 알림 노트가 생성되었습니다.")
+    print("마지막 확인 시간이 업데이트되었습니다.")
 
 if __name__ == "__main__":
     main()

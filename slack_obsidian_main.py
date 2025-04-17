@@ -242,7 +242,7 @@ def save_to_obsidian(messages_by_date, channel_name, obsidian_vault_path, slack_
     
     for date_str, messages in messages_by_date.items():
         # 날짜별 폴더 생성
-        date_path = os.path.join(obsidian_vault_path, slack_base_folder, channel_name, date_str)
+        date_path = os.path.join(obsidian_vault_path, slack_base_folder, date_str)
         Path(date_path).mkdir(parents=True, exist_ok=True)
         
         # 파일명 생성
