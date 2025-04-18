@@ -10,6 +10,7 @@ import datetime
 from pathlib import Path
 from collections import defaultdict
 from jira import JIRA
+import json
 
 def connect_to_jira(jira_server, jira_email, jira_api_token):
     """Jira에 연결"""
@@ -247,31 +248,45 @@ def create_notification_summary(issue, notification_type, comments=None,
     
     return summary
 
-def create_daily_note(date, notifications_by_type, vault_path, jira_base_folder):
-    """일별 노트 생성"""
-    # 날짜별 폴더 구조 생성 (YYYY-MM-DD)
-    date_folder = os.path.join(vault_path, jira_base_folder, date.strftime('%Y-%m-%d'))
+def create_daily_note(date, daily_notifications, vault_path, jira_base_folder):
+    """일일 노트 생성"""
+    # 날짜 폴더 생성
+    date_folder = os.path.join(vault_path, jira_base_folder, date.strftime("%Y-%m-%d"))
     os.makedirs(date_folder, exist_ok=True)
     
+    # 일일 노트 파일 경로
     note_path = os.path.join(date_folder, f"{date.strftime('%Y-%m-%d')}.md")
     
     with open(note_path, 'w', encoding='utf-8') as f:
         f.write(f"# {date.strftime('%Y년 %m월 %d일')} Jira 알림\n\n")
         
-        for notification_type, issues in notifications_by_type.items():
-            if issues:
-                f.write(f"## {notification_type}\n\n")
-                for issue, comments in issues:
-                    f.write(f"### {issue.key}: {issue.fields.summary}\n\n")
-                    f.write(f"- 상태: {issue.fields.status.name}\n")
-                    f.write(f"- 담당자: {issue.fields.assignee.displayName if issue.fields.assignee else '미지정'}\n")
-                    f.write(f"- 마지막 업데이트: {issue.fields.updated}\n\n")
-                    
-                    if comments:
-                        f.write("#### 댓글\n\n")
-                        for comment in comments:
-                            f.write(f"- {comment.author.displayName}: {comment.body}\n")
-                        f.write("\n")
+        # 문자열인 경우 JSON으로 파싱
+        if isinstance(daily_notifications, str):
+            try:
+                daily_notifications = json.loads(daily_notifications)
+            except json.JSONDecodeError:
+                print("JSON 파싱 실패")
+                return note_path
+        
+        for notification in daily_notifications:
+            if isinstance(notification, str):
+                try:
+                    notification = json.loads(notification)
+                except json.JSONDecodeError:
+                    continue
+            
+            f.write(f"## {notification['issue']['key']}: {notification['issue']['fields']['summary']}\n\n")
+            f.write(f"- 상태: {notification['issue']['fields']['status']['name']}\n")
+            f.write(f"- 담당자: {notification['issue']['fields']['assignee']['displayName']}\n")
+            f.write(f"- 우선순위: {notification['issue']['fields']['priority']['name']}\n")
+            f.write(f"- 마감일: {notification['issue']['fields']['duedate']}\n\n")
+            
+            if 'comment' in notification:
+                f.write("### 댓글\n")
+                f.write(f"- 작성자: {notification['comment']['author']['displayName']}\n")
+                f.write(f"- 내용: {notification['comment']['body']}\n\n")
+            
+            f.write("---\n\n")
     
     return note_path
 

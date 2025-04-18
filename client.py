@@ -190,7 +190,8 @@ async def run():
                 "startDate": start_iso,
                 "endDate": end_iso,
                 "notes": "손동협 일정",
-                "availability": "busy"
+                "availability": "busy",
+                "calendar": "primary"  # 기본 캘린더 사용
             })
             print(f"이벤트 생성 결과: {result}")
 
