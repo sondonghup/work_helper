@@ -41,7 +41,8 @@ def get_my_notifications(jira, last_check_time, project_keys=None, days=7):
         'mentioned': [],    # 댓글에서 멘션된 이슈
         'commented': [],    # 내가 댓글을 단 이슈
         'created': [],      # 내가 생성한 이슈
-        'watching': []      # 내가 지켜보는 이슈
+        'watching': [],     # 내가 지켜보는 이슈
+        'in_progress': []   # 내가 담당자인 진행 중인 이슈
     }
     
     # 마지막 검색 시간 또는 지정된 일수 중 더 오래된 기준 사용
@@ -84,6 +85,10 @@ def get_my_notifications(jira, last_check_time, project_keys=None, days=7):
         # 5. 내가 지켜보는 이슈
         watching_jql = f'watcher = currentUser() AND updated >= "{time_limit}"{project_filter} ORDER BY updated DESC'
         notifications['watching'] = jira.search_issues(watching_jql, maxResults=50)
+        
+        # 6. 내가 담당자인 진행 중인 이슈
+        in_progress_jql = f'assignee = currentUser() AND status = "In Progress"{project_filter} ORDER BY updated DESC'
+        notifications['in_progress'] = jira.search_issues(in_progress_jql, maxResults=50)
         
         return notifications
     except Exception as e:
@@ -268,6 +273,23 @@ def create_daily_note(date, daily_notifications, vault_path, jira_base_folder):
                 print("JSON 파싱 실패")
                 return note_path
         
+        # 작업 내용 섹션 추가
+        f.write("## 오늘의 작업\n\n")
+        f.write("### 완료한 작업\n")
+        f.write("- [ ] \n\n")
+        f.write("### 진행 중인 작업\n")
+        
+        # 진행 중인 작업 목록 추가
+        if 'in_progress' in daily_notifications and daily_notifications['in_progress']:
+            for issue, _ in daily_notifications['in_progress']:
+                f.write(f"- [ ] {issue.key}: {issue.fields.summary}\n")
+        else:
+            f.write("- [ ] \n")
+        
+        f.write("\n### 내일 할 작업\n")
+        f.write("- [ ] \n\n")
+        
+        f.write("## Jira 알림\n\n")
         for notification in daily_notifications:
             if isinstance(notification, str):
                 try:
@@ -275,14 +297,14 @@ def create_daily_note(date, daily_notifications, vault_path, jira_base_folder):
                 except json.JSONDecodeError:
                     continue
             
-            f.write(f"## {notification['issue']['key']}: {notification['issue']['fields']['summary']}\n\n")
+            f.write(f"### {notification['issue']['key']}: {notification['issue']['fields']['summary']}\n\n")
             f.write(f"- 상태: {notification['issue']['fields']['status']['name']}\n")
             f.write(f"- 담당자: {notification['issue']['fields']['assignee']['displayName']}\n")
             f.write(f"- 우선순위: {notification['issue']['fields']['priority']['name']}\n")
             f.write(f"- 마감일: {notification['issue']['fields']['duedate']}\n\n")
             
             if 'comment' in notification:
-                f.write("### 댓글\n")
+                f.write("#### 댓글\n")
                 f.write(f"- 작성자: {notification['comment']['author']['displayName']}\n")
                 f.write(f"- 내용: {notification['comment']['body']}\n\n")
             
