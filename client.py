@@ -36,12 +36,13 @@ one_week_ago = today - timedelta(days=7)
 dates = [(one_week_ago + timedelta(days=x)) for x in range(8)]  # 8일 = 일주일 전부터 오늘까지
 date_paths = []
 
-# Jira와 Slack 경로 생성
+# Jira, Slack, Diary 경로 생성
 for date in dates:
     date_str = date.strftime("%Y-%m-%d")
     date_paths.extend([
         f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Jira/{date_str}",
-        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Slack/{date_str}"
+        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Slack/{date_str}",
+        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Diary/{date_str}"
     ])
 
 # 실제 존재하는 디렉토리만 필터링
@@ -80,6 +81,15 @@ CONFIG = {
         'items': {
             'type': 'object',
             'properties': {
+                '날짜': {
+                    'type': 'string',
+                    'description': '일정의 날짜 (YYYY-MM-DD 형식)'
+                },
+                '타이틀': {
+                    'type': 'string',
+                    'description': '일정의 카테고리 (업무, 휴식, 식사 등)',
+                    'enum': ['업무', '휴식', '식사', '회의', '기타']
+                },
                 '시작시간': {
                     'type': 'string',
                     'description': '일정의 시작 시간 (HH:MM 형식)'
@@ -96,7 +106,7 @@ CONFIG = {
                     'description': '해당 시간대에 해야 할 일들의 목록'
                 }
             },
-            'required': ['시작시간', '종료시간', '내용']
+            'required': ['날짜', '타이틀', '시작시간', '종료시간', '내용']
         }
     }
 }
@@ -106,12 +116,16 @@ korea_tz = pytz.timezone('Asia/Seoul')
 tomorrow = datetime.now(korea_tz) + timedelta(days=1)
 tomorrow_str = tomorrow.strftime("%Y년 %m월 %d일")
 
-PROMPT = f"""해당 내용들을 읽고 {tomorrow_str}에 해야 하는 일을 시간대별로 정리해주세요.
+PROMPT = f"""해당 내용들을 읽고 {tomorrow_str}에 해야 하는 일만 시간대별로 정리해주세요. 다른 시간대에 해야 하는 일은 절대로 넣지 마세요
 만약 마감일이 있는 작업이라면 마감일 전까지 해야 하는 일을 적당히 분배 하여 정리해주세요.
 시간대는 아침 9시부터 밤 12시까지 1시간 간격으로 정리해주세요.
 회사는 09:00 ~ 18:00 근무입니다.
 점심 시간은 12:00 ~ 13:00 입니다.
+너무 빡빡하게 스케쥴 잡지 말고 기한이 남아 있는건 내 휴식 시간을 고려해서 잘 잡아줘
+그리고 각 시간대는 절대로 겹치면 안됨!!
 각 시간대는 다음과 같은 형식으로 작성해주세요:
+
+{tomorrow_str}
 
 [09:00 ~ 10:00]
 - 할 일 1
@@ -261,36 +275,40 @@ async def run():
                                 # iMCP 서버 초기화 및 이벤트 생성
                 async with create_server_session(server_params) as imcp_session:
                     try:
-                        # 한국 시간대 설정
-                        korea_tz = pytz.timezone('Asia/Seoul')
 
                         for schedule in gemini_response:
                             print(f"일정: {schedule}")
                             start_time = schedule['시작시간']
                             end_time = schedule['종료시간']
                             tasks = schedule['내용']
-                        
-                        # 현재 시간 기준으로 이벤트 생성
-                            now = datetime.now(korea_tz)
-                            start_hour, start_minute = map(int, start_time.split(':'))
-                            start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
-
-                            end_hour, end_minute = map(int, end_time.split(':'))
-                            end_time = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
-
+                            title = schedule['타이틀']
+                            date = schedule['날짜']
                                                         # ISO 형식으로 변환 (더 단순한 형식)
-                            start_iso = start_time.strftime("%Y-%m-%dT%H:%M:%S%z")
-                            end_iso = end_time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                            start_iso = f"{date} {start_time}"
+                            end_iso = f"{date} {end_time}"
 
+                            start_iso = datetime.strptime(start_iso, "%Y-%m-%d %H:%M")
+                            end_iso = datetime.strptime(end_iso, "%Y-%m-%d %H:%M")
 
-                        # 이벤트 생성
+                            korean_timezone = pytz.timezone('Asia/Seoul')
+
+                            start_iso = korean_timezone.localize(start_iso)
+                            end_iso = korean_timezone.localize(end_iso)
+
+                            start_iso = start_iso.isoformat() + "Z"
+                            end_iso = end_iso.isoformat() + "Z"
+
+                            print(f"시작 시간: {start_iso}")
+                            print(f"종료 시간: {end_iso}")
+
+                            # 이벤트 생성
                             result = await imcp_session.call_tool("createEvent", {
-                                "title": "업무",
+                                "title": title,
                                 "startDate": start_iso,
                                 "endDate": end_iso,
                                 "notes": f"{tasks}",
                                 "availability": "busy",
-                                "calendar": "primary"  # 기본 캘린더 사용
+                                "calendarName": "스케쥴러"  # 기본 캘린더 사용
                             })
                             print(f"이벤트 생성 결과: {result}")
 
