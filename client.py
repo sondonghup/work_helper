@@ -9,6 +9,8 @@ import os
 import json
 import google.generativeai as genai
 from dotenv import load_dotenv
+import subprocess
+import time
 
 # .env 파일 로드
 load_dotenv()
@@ -26,13 +28,50 @@ server_params = StdioServerParameters(
     command="/private/var/folders/9m/8c8yxc_55fd8czwpk611j6080000gn/T/AppTranslocation/3E61EC49-B551-4875-BD8D-C32E0E862F7D/d/iMCP.app/Contents/MacOS/imcp-server",  # Executable
 )
 
+# 한국 시간대 설정
+korea_tz = pytz.timezone('Asia/Seoul')
+today = datetime.now(korea_tz)
+one_week_ago = today - timedelta(days=7)
+
+# 일주일 동안의 모든 날짜 생성
+dates = [(one_week_ago + timedelta(days=x)) for x in range(8)]  # 8일 = 일주일 전부터 오늘까지
+date_paths = []
+
+# Jira와 Slack 경로 생성
+for date in dates:
+    date_str = date.strftime("%Y-%m-%d")
+    date_paths.extend([
+        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Jira/{date_str}",
+        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Slack/{date_str}"
+    ])
+
+# 실제 존재하는 디렉토리만 필터링
+existing_paths = []
+for path in date_paths:
+    if os.path.exists(path):
+        existing_paths.append(path)
+
+# Dailyplan 디렉토리 경로
+dailyplan_path = "/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Dailyplan"
+if os.path.exists(dailyplan_path):
+    existing_paths.append(dailyplan_path)
+
+# 최소한 하나의 허용 디렉토리가 필요하므로, 존재하는 디렉토리가 없으면 기본 디렉토리 추가
+if not existing_paths:
+    base_path = "/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report"
+    if os.path.exists(base_path):
+        existing_paths.append(base_path)
+    else:
+        existing_paths.append(".")  # 현재 디렉토리를 기본으로 사용
+
 file_server_params = StdioServerParameters(
     command="npx",
-    args=[        "-y",
+    args=[
+        "-y",
         "@modelcontextprotocol/server-filesystem",
-        "/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Daily Jira Notes/",
-        "/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Slack/llm-app",
-        "/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Dailyplan"]
+        existing_paths[0],  # 첫 번째 디렉토리를 허용 디렉토리로 지정
+        *existing_paths[1:]  # 나머지 디렉토리들을 추가 디렉토리로 지정
+    ]
 )
 
 # 내일 날짜 계산
@@ -60,7 +99,57 @@ PROMPT = f"""해당 내용들을 읽고 {tomorrow_str}에 해야 하는 일을 �
 
 각 시간대별로 해야 하는 일을 구체적으로 작성해주세요."""
 
+# 환경 변수에서 설정 가져오기
+OBSIDIAN_VAULT_PATH = os.getenv("OBSIDIAN_VAULT_PATH")
+SLACK_BASE_FOLDER = os.getenv("SLACK_BASE_FOLDER", "Slack")
+JIRA_BASE_FOLDER = os.getenv("JIRA_BASE_FOLDER", "Jira")
 
+def open_obsidian_note(file_path):
+    """Obsidian 노트 열기"""
+    try:
+        subprocess.run(["open", file_path])
+    except Exception as e:
+        print(f"파일 열기 실패: {e}")
+
+def main():
+    """메인 실행 함수"""
+    # 오늘 날짜와 일주일 전 날짜 계산
+    today = datetime.now(korea_tz).date()
+    one_week_ago = today - timedelta(days=7)
+    
+    # 일주일 동안의 모든 날짜 생성
+    dates = [(one_week_ago + timedelta(days=x)) for x in range(8)]  # 8일 = 일주일 전부터 오늘까지
+    
+    # 각 날짜별로 파일 열기
+    for date in dates:
+        date_str = date.strftime("%Y-%m-%d")
+        
+        # Slack 노트 경로
+        slack_note_path = os.path.join(
+            OBSIDIAN_VAULT_PATH,
+            SLACK_BASE_FOLDER,
+            date_str,
+            f"{date_str}.md"
+        )
+        
+        # Jira 노트 경로
+        jira_note_path = os.path.join(
+            OBSIDIAN_VAULT_PATH,
+            JIRA_BASE_FOLDER,
+            date_str,
+            f"{date_str}.md"
+        )
+        
+        # 파일이 존재하는 경우에만 열기
+        if os.path.exists(slack_note_path):
+            print(f"Slack 노트 열기: {slack_note_path}")
+            open_obsidian_note(slack_note_path)
+            time.sleep(1)  # 파일이 열리는 시간을 기다림
+        
+        if os.path.exists(jira_note_path):
+            print(f"Jira 노트 열기: {jira_note_path}")
+            open_obsidian_note(jira_note_path)
+            time.sleep(1)  # 파일이 열리는 시간을 기다림
 
 @asynccontextmanager
 async def create_server_session(params):
@@ -133,46 +222,36 @@ async def run():
         
             contents = ""
 
-            for directory in directories[:-1]:
+            # 각 디렉토리에서 파일 읽기
+            for directory in directories:
                 print(f"\n--- {directory} ---")
                 
                 dir_response = await file_session.call_tool("list_directory", {"path": directory})
                 dir_text = dir_response.content[0].text
                 
+                # .md 파일만 필터링
                 text_files = [line.replace('[FILE]', '').strip() for line in dir_text.split('\n') 
-                            if line.startswith('[FILE]') and any(line.endswith(ext) for ext in extensions)]
+                            if line.startswith('[FILE]') and line.endswith('.md')]
                 
-                print(f"{len(text_files)}개 파일: {', '.join(text_files[:3])}" + 
-                    ("..." if len(text_files) > 3 else ""))
+                print(f"{len(text_files)}개 파일: {', '.join(text_files)}")
                 
-                for filename in text_files:  # 최대 2개 파일만 읽기
+                # 모든 .md 파일 읽기
+                for filename in text_files:
                     try:
                         file_path = os.path.join(directory, filename)
                         file_response = await file_session.call_tool("read_file", {"path": file_path})
                         content = file_response.content[0].text
+                        contents += f"\n\n=== {filename} ===\n\n"
                         contents += content
-                        lines = content.split('\n')
                         
-                        print(f"\n> {filename}:")
-                        for i in range(min(3, len(lines))):
-                            print(f"  {lines[i]}")
-                        
-                        if len(lines) > 3:
-                            print("  ...")
-                    except:
-                        print(f"오류: {filename} 읽기 실패")
+                        print(f"파일 읽기 성공: {filename}")
+                    except Exception as e:
+                        print(f"오류: {filename} 읽기 실패 - {str(e)}")
 
             gemini_response = await ask_gemini(PROMPT + "\n\n" + contents)
             print("\nGemini API 응답:")
             print(gemini_response)
             print("\n" + "="*50 + "\n")
-
-            
-            
-            # 현재 설정 확인
-            
-
-
 
     except Exception as e:
         print(f"에러 발생: {e}")
