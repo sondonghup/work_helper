@@ -195,54 +195,11 @@ async def ask_gemini(question):
         contents = question,
         config = CONFIG
     )
-    return response.text
+    return response.parsed
 
 async def run():
     try:
         # Gemini API로 날씨 질문
-
-        # iMCP 서버 초기화 및 이벤트 생성
-        async with create_server_session(server_params) as imcp_session:
-            try:
-                # 한국 시간대 설정
-                korea_tz = pytz.timezone('Asia/Seoul')
-                
-                # 현재 시간 기준으로 이벤트 생성
-                now = datetime.now(korea_tz)
-                start_time = now.replace(hour=9, minute=0, second=0, microsecond=0)  # 오늘 오전 9시
-                end_time = start_time + timedelta(hours=1)  # 1시간 동안
-
-                # ISO 형식으로 변환 (더 단순한 형식)
-                start_iso = start_time.strftime("%Y-%m-%dT%H:%M:%S%z")
-                end_iso = end_time.strftime("%Y-%m-%dT%H:%M:%S%z")
-
-                print(f"시작 시간: {start_iso}")
-                print(f"종료 시간: {end_iso}")
-
-                # 이벤트 생성
-                result = await imcp_session.call_tool("createEvent", {
-                    "title": "손동협",
-                    "startDate": start_iso,
-                    "endDate": end_iso,
-                    "notes": "손동협 일정",
-                    "availability": "busy",
-                    "calendar": "primary"  # 기본 캘린더 사용
-                })
-                print(f"이벤트 생성 결과: {result}")
-
-                # 생성된 이벤트 확인
-                events = await imcp_session.call_tool("fetchEvents", {
-                    "startDate": start_iso,
-                    "endDate": end_iso
-                })
-                print(f"생성된 이벤트: {events}")
-
-            except Exception as e:
-                print(f"iMCP 서버 작업 중 에러 발생: {str(e)}")
-                print(f"에러 타입: {type(e).__name__}")
-                import traceback
-                print("상세 에러 스택:")
-                print(traceback.format_exc())
 
         # File 서버 초기화 및 경로 설정
         async with create_server_session(file_server_params) as file_session:
@@ -300,6 +257,56 @@ async def run():
                 print("\nGemini API 응답:")
                 print(gemini_response)
                 print("\n" + "="*50 + "\n")
+
+                                # iMCP 서버 초기화 및 이벤트 생성
+                async with create_server_session(server_params) as imcp_session:
+                    try:
+                        # 한국 시간대 설정
+                        korea_tz = pytz.timezone('Asia/Seoul')
+
+                        for schedule in gemini_response:
+                            print(f"일정: {schedule}")
+                            start_time = schedule['시작시간']
+                            end_time = schedule['종료시간']
+                            tasks = schedule['내용']
+                        
+                        # 현재 시간 기준으로 이벤트 생성
+                            now = datetime.now(korea_tz)
+                            start_hour, start_minute = map(int, start_time.split(':'))
+                            start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+
+                            end_hour, end_minute = map(int, end_time.split(':'))
+                            end_time = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+
+                                                        # ISO 형식으로 변환 (더 단순한 형식)
+                            start_iso = start_time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                            end_iso = end_time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
+                        # 이벤트 생성
+                            result = await imcp_session.call_tool("createEvent", {
+                                "title": "업무",
+                                "startDate": start_iso,
+                                "endDate": end_iso,
+                                "notes": f"{tasks}",
+                                "availability": "busy",
+                                "calendar": "primary"  # 기본 캘린더 사용
+                            })
+                            print(f"이벤트 생성 결과: {result}")
+
+                        # 생성된 이벤트 확인
+                            events = await imcp_session.call_tool("fetchEvents", {
+                                "startDate": start_iso,
+                                "endDate": end_iso
+                            })
+                            print(f"생성된 이벤트: {events}")
+
+                    except Exception as e:
+                        print(f"iMCP 서버 작업 중 에러 발생: {str(e)}")
+                        print(f"에러 타입: {type(e).__name__}")
+                        import traceback
+                        print("상세 에러 스택:")
+                        print(traceback.format_exc())
 
             except Exception as e:
                 print(f"File 서버 작업 중 에러 발생: {str(e)}")
