@@ -282,7 +282,8 @@ def create_daily_note(date, daily_notifications, vault_path, jira_base_folder):
         # 진행 중인 작업 목록 추가
         if 'in_progress' in daily_notifications and daily_notifications['in_progress']:
             for issue, _ in daily_notifications['in_progress']:
-                f.write(f"- [ ] {issue.key}: {issue.fields.summary}\n")
+                due_date = issue.fields.duedate if hasattr(issue.fields, 'duedate') and issue.fields.duedate else "마감일 없음"
+                f.write(f"- [ ] {issue.key}: {issue.fields.summary} (마감일: {due_date})\n")
         else:
             f.write("- [ ] \n")
         
