@@ -12,7 +12,7 @@ from collections import defaultdict
 from jira import JIRA
 from dotenv import load_dotenv
 
-import jira_obsidian_utils as utils
+import make_obsidian.jira_obsidian_utils as utils
 
 # .env 파일에서 환경 변수 로드
 load_dotenv()

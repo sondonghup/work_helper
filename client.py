@@ -44,7 +44,7 @@ for date in dates:
         f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Jira/{date_str}",
         f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Slack/{date_str}",
         f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Diary/{date_str}",
-        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Gmail/{date_str}"
+        # f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Gmail/{date_str}"
     ])
 
 # 실제 존재하는 디렉토리만 필터링
@@ -119,33 +119,31 @@ tomorrow = datetime.now(korea_tz) + timedelta(days=1)
 tomorrow_str = tomorrow.strftime("%Y년 %m월 %d일")
 tomorrow_weekday = tomorrow.strftime("%A")  # 요일 추가
 
-PROMPT = f"""해당 내용들을 읽고 {tomorrow_str}({tomorrow_weekday})에 해야 하는 일만 시간대별로 정리해주세요. 다른 시간대에 해야 하는 일은 절대로 넣지 마세요
-만약 마감일이 있는 작업이라면 마감일 전까지 해야 하는 일을 적당히 분배 하여 정리해주세요.
-시간대는 아침 9시부터 밤 12시까지 1시간 간격으로 정리해주세요.
-회사는 09:00 ~ 18:00 근무입니다.
-점심 시간은 12:00 ~ 13:00 입니다.
-너무 빡빡하게 스케쥴 잡지 말고 기한이 남아 있는건 내 휴식 시간을 고려해서 잘 잡아줘
-그리고 각 시간대는 절대로 겹치면 안됨!!
+PROMPT = f"""
+오늘 날짜는 {datetime.now(korea_tz)} 입니다.
+{tomorrow_str}({tomorrow_weekday})날 알어나거나 해야하는 일만 정리해주세요
+다른 날짜의 일은 전부 제거해주세요
 
-{tomorrow_str}가 주말이거나 쉬는 날이면 업무는 최대한 빼주세요
+ex) === 아래는 날짜 : 2025-04-29 일의 내용 입니다. ===
+내일 오후 4시에 우산을 사러가야 하고
+오늘은 오후 2시에 쓰레기를 버려야해
 
-각 시간대는 다음과 같은 형식으로 작성해주세요:
+위와 같이 되어 있다면 
+2025년 4월 30일 오후 4시에 우산을 사러가는 스캐쥴을 잡아야 하고
+2025년 4월 29일 오후 2시에 쓰레기를 버려야하는 스케쥴을 잡아야해
 
-[09:00 ~ 10:00]
-- 할 일 1
-- 할 일 2
 
-[10:00 ~ 11:00]
-- 할 일 1
-- 할 일 2
+그리고 종료시간 또는 시작시간이 24:00 일떄는 24:00 말고 23:59으로 해줘
 
-...
+평일 업무 시간은 
+오전 09:00 ~ 12:00 이고
+오후 13:00 ~ 18:00 이고
+점심 시간은 12:00 ~ 13:00 이고
+저녁 시간은 19:00 ~ 20:00 입니다.
 
-[23:00 ~ 00:00]
-- 할 일 1
-- 할 일 2
-
-각 시간대별로 해야 하는 일을 구체적으로 작성해주세요."""
+점심 저녁 시간도 같이 정리 해주세요
+스스로 판단해서 사용자가 동시에 할 수 없는 일은 시작시간 종료시간이 안 겹치게 시간을 설정해주세요
+"""
 
 # 환경 변수에서 설정 가져오기
 OBSIDIAN_VAULT_PATH = os.getenv("OBSIDIAN_VAULT_PATH")
@@ -158,46 +156,6 @@ def open_obsidian_note(file_path):
         subprocess.run(["open", file_path])
     except Exception as e:
         print(f"파일 열기 실패: {e}")
-
-def main():
-    """메인 실행 함수"""
-    # 오늘 날짜와 일주일 전 날짜 계산
-    today = datetime.now(korea_tz).date()
-    one_week_ago = today - timedelta(days=7)
-    
-    # 일주일 동안의 모든 날짜 생성
-    dates = [(one_week_ago + timedelta(days=x)) for x in range(8)]  # 8일 = 일주일 전부터 오늘까지
-    
-    # 각 날짜별로 파일 열기
-    for date in dates:
-        date_str = date.strftime("%Y-%m-%d")
-        
-        # Slack 노트 경로
-        slack_note_path = os.path.join(
-            OBSIDIAN_VAULT_PATH,
-            SLACK_BASE_FOLDER,
-            date_str,
-            f"{date_str}.md"
-        )
-        
-        # Jira 노트 경로
-        jira_note_path = os.path.join(
-            OBSIDIAN_VAULT_PATH,
-            JIRA_BASE_FOLDER,
-            date_str,
-            f"{date_str}.md"
-        )
-        
-        # 파일이 존재하는 경우에만 열기
-        if os.path.exists(slack_note_path):
-            print(f"Slack 노트 열기: {slack_note_path}")
-            open_obsidian_note(slack_note_path)
-            time.sleep(1)  # 파일이 열리는 시간을 기다림
-        
-        if os.path.exists(jira_note_path):
-            print(f"Jira 노트 열기: {jira_note_path}")
-            open_obsidian_note(jira_note_path)
-            time.sleep(1)  # 파일이 열리는 시간을 기다림
 
 @asynccontextmanager
 async def create_server_session(params):
@@ -260,7 +218,7 @@ async def run():
                             file_path = os.path.join(directory, filename)
                             file_response = await file_session.call_tool("read_file", {"path": file_path})
                             content = file_response.content[0].text
-                            contents += f"\n\n=== {filename} ===\n\n"
+                            contents += f"\n\n=== 아래는 날짜 : {filename.split('.')[0]} 일의 내용 입니다. ===\n\n"
                             contents += content
                             
                             print(f"파일 읽기 성공: {filename}")
@@ -271,8 +229,15 @@ async def run():
                             print("상세 에러 스택:")
                             print(traceback.format_exc())
 
-                gemini_response = await ask_gemini(PROMPT + "\n\n" + contents)
+                with open("contents.txt", "w") as f:
+                    f.write(contents)
+
+                with open("prompt.txt", "w") as f:
+                    f.write(PROMPT)
+
+                gemini_response = await ask_gemini(PROMPT + "\n\n내용:" + contents)
                 print("\nGemini API 응답:")
+                print(f"***************** : {contents}")
                 print(gemini_response)
                 print("\n" + "="*50 + "\n")
 

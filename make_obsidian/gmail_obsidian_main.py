@@ -48,7 +48,7 @@ def get_megastudy_emails():
 
     mail.login(os.getenv("GMAIL_ID"), os.getenv("GMAIL_PASSWORD"))
 
-    print(mail.select("INBOX"))
+    mail.select("INBOX")
 
     # 일주일 전 날짜 계산
     one_week_ago = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
@@ -111,10 +111,3 @@ def get_megastudy_emails():
 # 사용 예시
 if __name__ == "__main__":
     megastudy_emails = get_megastudy_emails()
-    print(f"총 {len(megastudy_emails)}개의 이메일을 처리했습니다.")
-    for email in megastudy_emails:
-        print(f"제목: {email['subject']}")
-        print(f"보낸 사람: {email['from']}")
-        print(f"날짜: {email['date']}")
-        print(f"내용: {email['content'][:200]}...")  # 내용의 처음 200자만 출력
-        print("-" * 50)
