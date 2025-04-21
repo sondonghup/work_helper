@@ -42,7 +42,8 @@ for date in dates:
     date_paths.extend([
         f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Jira/{date_str}",
         f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Slack/{date_str}",
-        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Diary/{date_str}"
+        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Diary/{date_str}",
+        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Gmail/{date_str}"
     ])
 
 # 실제 존재하는 디렉토리만 필터링
@@ -115,17 +116,19 @@ CONFIG = {
 korea_tz = pytz.timezone('Asia/Seoul')
 tomorrow = datetime.now(korea_tz) + timedelta(days=1)
 tomorrow_str = tomorrow.strftime("%Y년 %m월 %d일")
+tomorrow_weekday = tomorrow.strftime("%A")  # 요일 추가
 
-PROMPT = f"""해당 내용들을 읽고 {tomorrow_str}에 해야 하는 일만 시간대별로 정리해주세요. 다른 시간대에 해야 하는 일은 절대로 넣지 마세요
+PROMPT = f"""해당 내용들을 읽고 {tomorrow_str}({tomorrow_weekday})에 해야 하는 일만 시간대별로 정리해주세요. 다른 시간대에 해야 하는 일은 절대로 넣지 마세요
 만약 마감일이 있는 작업이라면 마감일 전까지 해야 하는 일을 적당히 분배 하여 정리해주세요.
 시간대는 아침 9시부터 밤 12시까지 1시간 간격으로 정리해주세요.
 회사는 09:00 ~ 18:00 근무입니다.
 점심 시간은 12:00 ~ 13:00 입니다.
 너무 빡빡하게 스케쥴 잡지 말고 기한이 남아 있는건 내 휴식 시간을 고려해서 잘 잡아줘
 그리고 각 시간대는 절대로 겹치면 안됨!!
-각 시간대는 다음과 같은 형식으로 작성해주세요:
 
 {tomorrow_str}가 주말이거나 쉬는 날이면 업무는 최대한 빼주세요
+
+각 시간대는 다음과 같은 형식으로 작성해주세요:
 
 [09:00 ~ 10:00]
 - 할 일 1
