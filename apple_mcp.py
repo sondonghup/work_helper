@@ -36,3 +36,6 @@ async def create_event(event: CalendarEvent) -> str:
         is_all_day=event.is_all_day,
         calendar_name=event.calendar_name
     )
+
+if __name__ == "__main__":
+    mcp.run()
