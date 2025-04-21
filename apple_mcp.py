@@ -21,7 +21,6 @@ class CalendarEvent(BaseModel):
     end_date: str
     location: Optional[str] = None
     notes: Optional[str] = None
-    is_all_day: bool = False
     calendar_name: Optional[str] = None
 
 @mcp.tool()
@@ -33,7 +32,6 @@ async def create_event(event: CalendarEvent) -> str:
         end_date=event.end_date,
         location=event.location,
         notes=event.notes,
-        is_all_day=event.is_all_day,
         calendar_name=event.calendar_name
     )
 
