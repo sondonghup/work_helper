@@ -24,7 +24,8 @@ if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY가 .env 파일에 설정되어 있지 않습니다.")
 
 server_params = StdioServerParameters(
-    command="/private/var/folders/9m/8c8yxc_55fd8czwpk611j6080000gn/T/AppTranslocation/3E61EC49-B551-4875-BD8D-C32E0E862F7D/d/iMCP.app/Contents/MacOS/imcp-server",  # Executable
+    command="python",
+    args=["apple_mcp.py"],
 )
 
 # 한국 시간대 설정
@@ -298,29 +299,29 @@ async def run():
                             start_iso = korean_timezone.localize(start_iso)
                             end_iso = korean_timezone.localize(end_iso)
 
-                            start_iso = start_iso.isoformat() + "Z"
-                            end_iso = end_iso.isoformat() + "Z"
+                            start_iso = start_iso.isoformat()
+                            end_iso = end_iso.isoformat()
 
                             print(f"시작 시간: {start_iso}")
                             print(f"종료 시간: {end_iso}")
 
                             # 이벤트 생성
-                            result = await imcp_session.call_tool("createEvent", {
-                                "title": title,
-                                "startDate": start_iso,
-                                "endDate": end_iso,
-                                "notes": f"{tasks}",
-                                "availability": "busy",
-                                "calendarName": "스케쥴러"  # 기본 캘린더 사용
-                            })
-                            print(f"이벤트 생성 결과: {result}")
+                            result = await imcp_session.call_tool(
+                                "create_event", 
+                                arguments:={
+                                    "event": {
+                                        "title": title,
+                                        "start_date": str(start_iso),
+                                        "end_date": str(end_iso),
+                                        "location": None,  # 선택적 필드
+                                        "notes": "\n".join(tasks).replace("[", " ").replace("]", " "  ),
+                                        "calendar_name": "스케쥴러"
 
-                        # 생성된 이벤트 확인
-                            events = await imcp_session.call_tool("fetchEvents", {
-                                "startDate": start_iso,
-                                "endDate": end_iso
-                            })
-                            print(f"생성된 이벤트: {events}")
+                                    }
+                                }
+                            )
+                            print(f"arguments : {arguments}")
+                            print(f"이벤트 생성 결과: {result}")
 
                     except Exception as e:
                         print(f"iMCP 서버 작업 중 에러 발생: {str(e)}")

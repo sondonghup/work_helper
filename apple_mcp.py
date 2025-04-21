@@ -17,7 +17,7 @@ caledar_module = CalendarModule()
 
 class CalendarEvent(BaseModel):
     title: str
-    start_date: str
+    start_date: str        
     end_date: str
     location: Optional[str] = None
     notes: Optional[str] = None
