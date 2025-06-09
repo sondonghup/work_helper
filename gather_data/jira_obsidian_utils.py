@@ -245,7 +245,8 @@ def create_notification_summary(issue, notification_type, comments=None,
             summary += f"**최근 댓글** ({comment['author']}):\n> {comment['body'][:150]}{'...' if len(comment['body']) > 150 else ''}\n\n"
     
     # 링크 추가
-    file_path = f"{jira_base_folder}/{fields.project.key}/{issue.key} - {fields.summary[:30].replace('/', '-').replace('\\', '-').replace(':', '-')}"
+    summary_clean = fields.summary[:30].replace('/', '-').replace('\\', '-').replace(':', '-')
+    file_path = f"{jira_base_folder}/{fields.project.key}/{issue.key} - {summary_clean}"
     summary += f"[이슈 상세 보기](obsidian://open?vault={os.path.basename(obsidian_vault_path)}&file={file_path})\n"
     summary += f"[Jira에서 보기]({jira_server}/browse/{issue.key})\n\n"
     

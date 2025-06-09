@@ -8,7 +8,6 @@ from contextlib import asynccontextmanager
 import os
 import json
 import google.generativeai as genai
-from google import genai
 from dotenv import load_dotenv
 import subprocess
 import time
@@ -41,10 +40,10 @@ date_paths = []
 for date in dates:
     date_str = date.strftime("%Y-%m-%d")
     date_paths.extend([
-        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Jira/{date_str}",
-        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Slack/{date_str}",
-        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Diary/{date_str}",
-        # f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Gmail/{date_str}"
+        f"/Users/sondonghup/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Jira/{date_str}",
+        f"/Users/sondonghup/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Slack/{date_str}",
+        f"/Users/sondonghup/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Diary/{date_str}",
+        f"/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Gmail/{date_str}"
     ])
 
 # 실제 존재하는 디렉토리만 필터링
@@ -54,13 +53,13 @@ for path in date_paths:
         existing_paths.append(path)
 
 # Dailyplan 디렉토리 경로
-dailyplan_path = "/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Dailyplan"
+dailyplan_path = "/Users/sondonghup/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/Dailyplan"
 if os.path.exists(dailyplan_path):
     existing_paths.append(dailyplan_path)
 
 # 최소한 하나의 허용 디렉토리가 필요하므로, 존재하는 디렉토리가 없으면 기본 디렉토리 추가
 if not existing_paths:
-    base_path = "/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report"
+    base_path = "/Users/sondonghup/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report"
     if os.path.exists(base_path):
         existing_paths.append(base_path)
     else:
@@ -119,8 +118,10 @@ tomorrow = datetime.now(korea_tz) + timedelta(days=1)
 tomorrow_str = tomorrow.strftime("%Y년 %m월 %d일")
 tomorrow_weekday = tomorrow.strftime("%A")  # 요일 추가
 
+# 오늘 날짜는 {datetime.now(korea_tz)} 입니다.
+
 PROMPT = f"""
-오늘 날짜는 {datetime.now(korea_tz)} 입니다.
+오늘 날짜는 2025년 5월 28일 입니다.
 {tomorrow_str}({tomorrow_weekday})날 알어나거나 해야하는 일만 정리해주세요
 다른 날짜의 일은 전부 제거해주세요
 
@@ -165,13 +166,24 @@ async def create_server_session(params):
             yield session
 
 async def ask_gemini(question):
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    response = client.models.generate_content(
-        model = 'gemini-1.5-pro',
-        contents = question,
-        config = CONFIG
-    )
-    return response.parsed
+    try:
+        # API 키 설정 (함수 외부에서 한 번만 실행하는 것이 좋음)
+        genai.configure(api_key=GEMINI_API_KEY)
+        
+        # 모델 생성
+        model = genai.GenerativeModel('gemini-2.5-flash-preview-04-17')
+        
+        # 콘텐츠 생성
+        response = model.generate_content(
+            contents=question,
+            generation_config=CONFIG  # CONFIG가 있다면
+        )
+        
+        return response.text
+        
+    except Exception as e:
+        print(f"Gemini API 오류: {e}")
+        return None
 
 async def run():
     try:
@@ -185,8 +197,6 @@ async def run():
                 tools_response = await file_session.list_tools()
                 tool_names = [tool.name for tool in tools_response.tools]
                 print("도구:", ", ".join(tool_names)) 
-
-                extensions = ['.txt', '.md', '.py', '.json', '.csv', '.log']
 
                 allowed_response = await file_session.call_tool("list_allowed_directories")
                 allowed_text = allowed_response.content[0].text
@@ -236,6 +246,7 @@ async def run():
                     f.write(PROMPT)
 
                 gemini_response = await ask_gemini(PROMPT + "\n\n내용:" + contents)
+                
                 print("\nGemini API 응답:")
                 print(f"***************** : {contents}")
                 print(gemini_response)

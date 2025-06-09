@@ -10,7 +10,7 @@ import pytz
 load_dotenv()
 
 # Obsidian 설정
-OBSIDIAN_VAULT_PATH = os.getenv("OBSIDIAN_VAULT_PATH", "/Users/sondonghyeob/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/")
+OBSIDIAN_VAULT_PATH = os.getenv("OBSIDIAN_VAULT_PATH", "/Users/sondonghup/Library/Mobile Documents/iCloud~md~obsidian/Documents/daily report/")
 GMAIL_FOLDER = "Gmail"
 
 def save_emails_to_obsidian(emails):

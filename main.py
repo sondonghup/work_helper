@@ -1,12 +1,12 @@
-import schedule
+# import schedule
 import time
 import datetime
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
-from make_obsidian.gmail_obsidian_main import get_megastudy_emails
-from make_obsidian.jira_obsidian_main import main as jira_obsidian_main
-from make_obsidian.slack_obsidian_main import main as slack_obsidian_main
+from gather_data.gmail_obsidian_main import get_megastudy_emails
+from gather_data.jira_obsidian_main import main as jira_obsidian_main
+from gather_data.slack_obsidian_main import main as slack_obsidian_main
 from client import run as client_run
 
 async def run_all_tasks():
@@ -26,11 +26,12 @@ def schedule_job():
 
 if __name__ == "__main__":
     # 매일 오전 7시에 실행
-    schedule.every().day.at("07:00").do(schedule_job)
+    # schedule.every().day.at("21:08").do(schedule_job)
     
-    print("스케줄러가 실행 중입니다...")
-    while True:
-        schedule.run_pending()
-        time.sleep(1)  # 1분마다 체크
+    # print("스케줄러가 실행 중입니다...")
+    # while True:
+    #     schedule.run_pending()
+    #     time.sleep(1)  # 1분마다 체크
 
 
+    schedule_job()
