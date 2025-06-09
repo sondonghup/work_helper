@@ -239,14 +239,8 @@ async def run():
                             print("상세 에러 스택:")
                             print(traceback.format_exc())
 
-                with open("contents.txt", "w") as f:
-                    f.write(contents)
-
-                with open("prompt.txt", "w") as f:
-                    f.write(PROMPT)
-
                 gemini_response = await ask_gemini(PROMPT + "\n\n내용:" + contents)
-                
+
                 print("\nGemini API 응답:")
                 print(f"***************** : {contents}")
                 print(gemini_response)
