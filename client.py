@@ -121,7 +121,7 @@ tomorrow_weekday = tomorrow.strftime("%A")  # 요일 추가
 # 오늘 날짜는 {datetime.now(korea_tz)} 입니다.
 
 PROMPT = f"""
-오늘 날짜는 2025년 5월 28일 입니다.
+오늘 날짜는 {today} 입니다.
 {tomorrow_str}({tomorrow_weekday})날 알어나거나 해야하는 일만 정리해주세요
 다른 날짜의 일은 전부 제거해주세요
 
