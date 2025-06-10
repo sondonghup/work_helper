@@ -1,4 +1,4 @@
-# import schedule
+import schedule
 import time
 import datetime
 import asyncio
@@ -26,12 +26,12 @@ def schedule_job():
 
 if __name__ == "__main__":
     # 매일 오전 7시에 실행
-    # schedule.every().day.at("21:08").do(schedule_job)
+    schedule.every().day.at("07:00").do(schedule_job)
     
-    # print("스케줄러가 실행 중입니다...")
-    # while True:
-    #     schedule.run_pending()
-    #     time.sleep(1)  # 1분마다 체크
+    print("스케줄러가 실행 중입니다...")
+    while True:
+        schedule.run_pending()
+        time.sleep(1)  # 1분마다 체크
 
 
     schedule_job()
